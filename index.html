@@ -6,76 +6,103 @@
 <title>PDF a Imágenes</title>
 
 <style>
+:root {
+  --bg: #f0f0f0;
+  --card: #ffffff;
+  --text: #000;
+}
+
+body.dark {
+  --bg: #121212;
+  --card: #1e1e1e;
+  --text: #fff;
+}
+
 body {
   font-family: Arial, sans-serif;
-  background: #f0f0f0;
+  background: var(--bg);
+  color: var(--text);
+  transition: background .3s, color .3s;
 }
 
 .container {
-  max-width: 800px;
+  max-width: 850px;
   margin: 40px auto;
   padding: 20px;
-  background: #fff;
+  background: var(--card);
   border-radius: 10px;
   box-shadow: 0 0 10px rgba(0,0,0,.1);
 }
 
-h1 { text-align: center; }
+h1 {
+  text-align: center;
+}
 
 .controls {
   display: flex;
   gap: 10px;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+button, a.btn {
+  padding: 10px 20px;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 button {
-  padding: 10px 20px;
   background: #4CAF50;
-  border: none;
-  color: white;
-  cursor: pointer;
-  border-radius: 5px;
 }
 
-button:hover { background: #3e8e41; }
-
-select {
-  padding: 9px;
-  border-radius: 5px;
+button:disabled {
+  background: #888;
+  cursor: not-allowed;
 }
 
-#loader {
+a.btn {
+  background: #007BFF;
+  text-decoration: none;
   display: none;
-  margin-top: 15px;
-  font-size: 16px;
-  text-align: center;
 }
 
-#progress-container {
+.danger {
+  background: #dc3545;
+}
+
+.dark-btn {
+  background: #333;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 3px solid #fff;
+  border-top: 3px solid transparent;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
   display: none;
-  margin-top: 15px;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
 }
 
 progress {
   width: 100%;
   height: 20px;
-}
-
-#progress-text {
-  text-align: center;
-  margin-top: 5px;
-}
-
-#download-link {
   display: none;
-  margin-top: 20px;
-  padding: 10px 20px;
-  background: #007BFF;
-  color: white;
-  text-decoration: none;
-  border-radius: 5px;
-  float: right;
+  margin-top: 10px;
 }
 
 #images-container {
@@ -94,6 +121,7 @@ progress {
 </head>
 
 <body>
+
 <div class="container">
   <h1>Conversor PDF a Imágenes</h1>
 
@@ -105,17 +133,26 @@ progress {
       <option value="image/png">PNG</option>
     </select>
 
-    <button id="convert-btn">Convertir</button>
+    <div class="actions">
+      <button id="convert-btn">
+        Convertir
+        <span class="spinner" id="convert-loader"></span>
+      </button>
+
+      <button id="cancel-btn" class="danger" disabled>
+        Cancelar
+      </button>
+
+      <a id="download-link" class="btn">
+        Descargar ZIP
+        <span class="spinner" id="download-loader"></span>
+      </a>
+
+      <button id="dark-btn" class="dark-btn">🌙</button>
+    </div>
   </div>
 
-  <div id="loader">Procesando PDF…</div>
-
-  <div id="progress-container">
-    <progress id="progress-bar" value="0" max="100"></progress>
-    <div id="progress-text">0%</div>
-  </div>
-
-  <a id="download-link">Descargar ZIP</a>
+  <progress id="progress-bar" max="100" value="0"></progress>
 
   <div id="images-container"></div>
 </div>
@@ -129,35 +166,45 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 
 const pdfInput = document.getElementById("pdf-file");
 const convertBtn = document.getElementById("convert-btn");
-const imagesContainer = document.getElementById("images-container");
+const cancelBtn = document.getElementById("cancel-btn");
 const downloadLink = document.getElementById("download-link");
-const loader = document.getElementById("loader");
-const formatSelect = document.getElementById("format");
+const imagesContainer = document.getElementById("images-container");
 const progressBar = document.getElementById("progress-bar");
-const progressText = document.getElementById("progress-text");
-const progressContainer = document.getElementById("progress-container");
+const formatSelect = document.getElementById("format");
 
+const convertLoader = document.getElementById("convert-loader");
+const downloadLoader = document.getElementById("download-loader");
+const darkBtn = document.getElementById("dark-btn");
+
+let cancelProcess = false;
+
+/* CONVERTIR */
 convertBtn.addEventListener("click", async () => {
   const file = pdfInput.files[0];
-  if (!file) {
-    alert("Seleccione un PDF");
-    return;
-  }
+  if (!file) return alert("Seleccione un PDF");
+
+  cancelProcess = false;
+
+  convertBtn.disabled = true;
+  cancelBtn.disabled = false;
+  pdfInput.disabled = true;
+  formatSelect.disabled = true;
+
+  convertLoader.style.display = "inline-block";
+  progressBar.style.display = "block";
+  progressBar.value = 0;
 
   imagesContainer.innerHTML = "";
   downloadLink.style.display = "none";
-  loader.style.display = "block";
-  progressContainer.style.display = "block";
-  progressBar.value = 0;
-  progressText.textContent = "0%";
-
-  const type = formatSelect.value;
-  const ext = type === "image/png" ? "png" : "jpg";
 
   const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
   const zip = new JSZip();
+  const type = formatSelect.value;
+  const ext = type.includes("png") ? "png" : "jpg";
 
   for (let i = 1; i <= pdf.numPages; i++) {
+    if (cancelProcess) break;
+
     const page = await pdf.getPage(i);
     const viewport = page.getViewport({ scale: 1.5 });
 
@@ -169,25 +216,51 @@ convertBtn.addEventListener("click", async () => {
 
     await page.render({ canvasContext: ctx, viewport }).promise;
 
-    const imgData = canvas.toDataURL(type);
-    zip.file(`pagina-${i}.${ext}`, imgData.split(",")[1], { base64: true });
+    const data = canvas.toDataURL(type);
+    zip.file(`pagina-${i}.${ext}`, data.split(",")[1], { base64: true });
 
     const img = document.createElement("img");
-    img.src = imgData;
+    img.src = data;
     imagesContainer.appendChild(img);
 
-    const progress = Math.round((i / pdf.numPages) * 100);
-    progressBar.value = progress;
-    progressText.textContent = progress + "%";
+    progressBar.value = Math.round((i / pdf.numPages) * 100);
   }
 
-  const zipBlob = await zip.generateAsync({ type: "blob" });
-  downloadLink.href = URL.createObjectURL(zipBlob);
-  downloadLink.download = "imagenes.zip";
-  downloadLink.style.display = "inline-block";
+  if (!cancelProcess) {
+    const blob = await zip.generateAsync({ type: "blob" });
+    downloadLink.href = URL.createObjectURL(blob);
+    downloadLink.download = "imagenes.zip";
+    downloadLink.style.display = "inline-flex";
+  }
 
-  loader.style.display = "none";
+  convertLoader.style.display = "none";
+  convertBtn.disabled = false;
+  cancelBtn.disabled = true;
+  pdfInput.disabled = false;
+  formatSelect.disabled = false;
 });
+
+/* CANCELAR */
+cancelBtn.addEventListener("click", () => {
+  cancelProcess = true;
+});
+
+/* LOADER AL DESCARGAR */
+downloadLink.addEventListener("click", () => {
+  downloadLoader.style.display = "inline-block";
+  setTimeout(() => downloadLoader.style.display = "none", 1200);
+});
+
+/* MODO OSCURO */
+darkBtn.addEventListener("click", () => {
+  document.body.classList.toggle("dark");
+  localStorage.theme = document.body.classList.contains("dark") ? "dark" : "light";
+});
+
+if (localStorage.theme === "dark") {
+  document.body.classList.add("dark");
+}
 </script>
+
 </body>
 </html>
