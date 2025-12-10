@@ -1,145 +1,193 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conversor de PDF a Imágenes</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f0f0f0;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF a Imágenes</title>
 
-    .container {
-      max-width: 800px;
-      margin: 40px auto;
-      padding: 20px;
-      background-color: #fff;
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    }
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f0f0f0;
+}
 
-    .header {
-      text-align: center;
-      margin-bottom: 20px;
-    }
+.container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 20px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0,0,0,.1);
+}
 
-    .header h1 {
-      font-size: 24px;
-      margin-bottom: 10px;
-    }
+h1 { text-align: center; }
 
-    .form-group {
-      margin-bottom: 20px;
-    }
+.controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
 
-    .form-group label {
-      display: block;
-      margin-bottom: 10px;
-    }
+button {
+  padding: 10px 20px;
+  background: #4CAF50;
+  border: none;
+  color: white;
+  cursor: pointer;
+  border-radius: 5px;
+}
 
-    .form-group input[type="file"] {
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
+button:hover { background: #3e8e41; }
 
-    .btn {
-      padding: 10px 20px;
-      background-color: #4CAF50;
-      color: #fff;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
+select {
+  padding: 9px;
+  border-radius: 5px;
+}
 
-    .btn:hover {
-      background-color: #3e8e41;
-    }
+#loader {
+  display: none;
+  margin-top: 15px;
+  font-size: 16px;
+  text-align: center;
+}
 
-    #images-container {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-top: 20px;
-    }
+#progress-container {
+  display: none;
+  margin-top: 15px;
+}
 
-    .image-container {
-      margin: 10px;
-    }
+progress {
+  width: 100%;
+  height: 20px;
+}
 
-    .image-container img {
-      width: 200px;
-      height: 200px;
-      object-fit: cover;
-      border: 1px solid #ccc;
-    }
+#progress-text {
+  text-align: center;
+  margin-top: 5px;
+}
 
-    #download-link {
-      display: none;
-      margin-top: 20px;
-      text-align: center;
-    }
-  </style>
+#download-link {
+  display: none;
+  margin-top: 20px;
+  padding: 10px 20px;
+  background: #007BFF;
+  color: white;
+  text-decoration: none;
+  border-radius: 5px;
+  float: right;
+}
+
+#images-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+#images-container img {
+  width: 120px;
+  margin: 5px;
+  border: 1px solid #ccc;
+}
+</style>
 </head>
+
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>Conversor de PDF a Imágenes</h1>
-    </div>
-    <form>
-      <div class="form-group">
-        <label for="pdf-file">Seleccione un archivo PDF:</label>
-        <input type="file" id="pdf-file" accept=".pdf">
-      </div>
-      <button class="btn" id="convert-btn">Convertir</button>
-    </form>
-    <div id="images-container"></div>
-    <a id="download-link" href="                                                   
+<div class="container">
+  <h1>Conversor PDF a Imágenes</h1>
+
+  <div class="controls">
+    <input type="file" id="pdf-file" accept=".pdf">
+
+    <select id="format">
+      <option value="image/jpeg">JPG</option>
+      <option value="image/png">PNG</option>
+    </select>
+
+    <button id="convert-btn">Convertir</button>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
-  <script>
-    const pdfFileInput = document.getElementById('pdf-file');
-    const convertBtn = document.getElementById('convert-btn');
-    const imagesContainer = document.getElementById('images-container');
-    const downloadLink = document.getElementById('download-link');
+  <div id="loader">Procesando PDF…</div>
 
-    convertBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      const pdfFile = pdfFileInput.files[0];
-      if (!pdfFile) return;
+  <div id="progress-container">
+    <progress id="progress-bar" value="0" max="100"></progress>
+    <div id="progress-text">0%</div>
+  </div>
 
-      try {
-        const pdf = await pdfjsLib.getDocument(pdfFile).promise;
-        const numPages = pdf.numPages;
-        const images = [];
+  <a id="download-link">Descargar ZIP</a>
 
-        for (let i = 1; i <= numPages; i++) {
-          const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale: 1.5 });
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          await page.render({ canvasContext: context, viewport }).promise;
-          const imageData = canvas.toDataURL();
-          images.push(imageData);
-        }
+  <div id="images-container"></div>
+</div>
 
-        const zip = new JSZip();
-        images.forEach((image, index) => {
-          zip.file(`imagen-${index + 1}.jpg`, image.split(',')[1], { base64: true });
-        });
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        downloadLink.href = URL.createObjectURL(zipBlob);
-        downloadLink.style.display = 'block';
-      } catch (error) {
-        console.error(error);
-      }
-    });
-  </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
+
+const pdfInput = document.getElementById("pdf-file");
+const convertBtn = document.getElementById("convert-btn");
+const imagesContainer = document.getElementById("images-container");
+const downloadLink = document.getElementById("download-link");
+const loader = document.getElementById("loader");
+const formatSelect = document.getElementById("format");
+const progressBar = document.getElementById("progress-bar");
+const progressText = document.getElementById("progress-text");
+const progressContainer = document.getElementById("progress-container");
+
+convertBtn.addEventListener("click", async () => {
+  const file = pdfInput.files[0];
+  if (!file) {
+    alert("Seleccione un PDF");
+    return;
+  }
+
+  imagesContainer.innerHTML = "";
+  downloadLink.style.display = "none";
+  loader.style.display = "block";
+  progressContainer.style.display = "block";
+  progressBar.value = 0;
+  progressText.textContent = "0%";
+
+  const type = formatSelect.value;
+  const ext = type === "image/png" ? "png" : "jpg";
+
+  const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+  const zip = new JSZip();
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1.5 });
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    const imgData = canvas.toDataURL(type);
+    zip.file(`pagina-${i}.${ext}`, imgData.split(",")[1], { base64: true });
+
+    const img = document.createElement("img");
+    img.src = imgData;
+    imagesContainer.appendChild(img);
+
+    const progress = Math.round((i / pdf.numPages) * 100);
+    progressBar.value = progress;
+    progressText.textContent = progress + "%";
+  }
+
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  downloadLink.href = URL.createObjectURL(zipBlob);
+  downloadLink.download = "imagenes.zip";
+  downloadLink.style.display = "inline-block";
+
+  loader.style.display = "none";
+});
+</script>
 </body>
 </html>
